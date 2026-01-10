@@ -1,0 +1,4 @@
+. I tried overhauling the rendering method to place lines in 3d space with a
+projection, failed attempt
+. There are gaps between the lines and rotation between engine and 3d are
+different
