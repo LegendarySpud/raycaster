@@ -1,0 +1,12 @@
+To compile:
+	cmb
+	or
+	cmake -S . -B build && cmake --build build
+
+To run:
+	run main
+	or
+	./build/main
+
+. If you have files in src to compile, add its directory to CMakeLists under add_executable
+. Change the name of the output by changing the project name in CMakeLists
