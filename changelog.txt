@@ -1,0 +1,6 @@
+. Added texture rendering (only one texture)
+. Fixed wall scaling
+. Added wall heights
+. Added map loading
+
+. I think the x axis of the map is flipped
