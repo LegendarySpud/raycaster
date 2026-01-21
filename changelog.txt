@@ -1,6 +1,7 @@
-. Added texture rendering (only one texture)
-. Fixed wall scaling
-. Added wall heights
-. Added map loading
+. Multiple textures based on grid cell value and texture atlas
+. Grid cell can have rotation and different textures on each side
+. Per-map texture atlas
+. RGB based map editor (red and green channels for cell value, blue for rotation)
 
-. I think the x axis of the map is flipped
+. I think that x is still flipped, i might get to that some time
+. Started implementation of json loading

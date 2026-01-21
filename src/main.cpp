@@ -9,17 +9,20 @@
 #include "../include/glm/gtc/type_ptr.hpp"
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
+#include <json.hpp>
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow *window);
-void castRay(glm::vec2 start_pos, glm::vec2 ray_dir, int* grid, int grid_sx, int grid_sy, float* pDist, int* wall_type, float* tex_x);
+void castRay(glm::vec2 start_pos, glm::vec2 ray_dir, int* grid, int grid_sx, int grid_sy, float* pDist, float* tex_x, int* tex_index);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 bool isColour(float* col_1, float* col_2);
 void setColour(float* col, float r, float g, float b);
+//void loadJSON(const char* path, );
 
 class Player {
     public:
         glm::vec2 pos;
+        glm::vec2 vel;
         float ang;
         glm::vec2 ang_dir;
         float fov;
@@ -60,6 +63,13 @@ float rect[] = {
      1.0f,-1.0f, 0.0f
 };
 
+int tex_sides[] = {
+    0, 0, 0, 0,
+    1, 1, 1, 1,
+    2, 2, 2, 2,
+    0, 1, 2, 3
+};
+
 /*int map[] = {
     1, 1, 1, 1, 1, 1, 1,
     1, 1, 0, 0, 0, 0, 1,
@@ -73,9 +83,10 @@ int map_x = 7;
 int map_y = 7;*/
 int map_x, map_y;
 float wall_height = 4.0f;
+std::string cur_map = "map1";
 
 Player player(scr_rat, glm::vec2(2.5f, 3.45f), glm::radians(0.0f), 30.0f, wall_height);
-float player_speed = 3.0f;
+float player_speed = wall_height;
 
 bool first_mouse = false;
 double last_x, last_y; 
@@ -174,29 +185,32 @@ int main() {
     // map loading
     //stbi_set_flip_vertically_on_load();
     int width, height, nrChannels;
-    unsigned char *data = stbi_load("maps/map1/walls.png", &width, &height, &nrChannels, 0);
+    std::string map_path = "maps/" + cur_map + "/walls.png";
+    unsigned char *data = stbi_load(map_path.c_str(), &width, &height, &nrChannels, 0);
     std::cout << nrChannels << "\n";
     if (!data) std::cout << "Map did not load.\n";
     map_x = width;
     map_y = height;
     int map[width * height];
     for (int i=0; i<width*height; i++) {
-        float colour[] = {
-            (float)data[i*nrChannels+0]/256.0f,
-            (float)data[i*nrChannels+1]/256.0f,
-            (float)data[i*nrChannels+2]/256.0f
-        };
-        float tile_colour[] = {1.0f, 1.0f, 1.0f};
-        if (isColour(colour, tile_colour)) map[i] = 0;
-        setColour(tile_colour, 0.0f, 0.0f, 0.0f);
-        if (isColour(colour, tile_colour)) map[i] = 1;
+        int r = data[i*nrChannels+0]+1;   // Greater digit
+        int g = data[i*nrChannels+1]+1;   // Lesser digit
+        int b = data[i*nrChannels+2]+1;   // Rotation
+        map[i] = r/4 + g/16 + b/64;
     }
     std::cout << map_x << "\n";
     std::cout << map_y << "\n";
 
+    for (int y=0; y<map_y; y++) {
+        for (int x=0; x<map_x; x++) {
+            std::cout << map[y*map_y + x] << " ";
+        }
+        std::cout << "\n";
+    }
+
     // texture loading
-    //
-    data = stbi_load("assets/bricks.png", &width, &height, &nrChannels, 0);
+    std::string atlas_path = "maps/" + cur_map + "/walls_atlas.png";
+    data = stbi_load(atlas_path.c_str(), &width, &height, &nrChannels, 0);
     if (!data) std::cout << "Texture did not load.\n";
     unsigned int texture;
     glGenTextures(1, &texture);
@@ -226,7 +240,7 @@ int main() {
             glViewport(0, 0, fbx, fby);*/
         }
         processInput(window);
-        std::cout << "(" << player.pos.x << ", " << player.pos.y << ") " << player.ang << "\n";
+        //std::cout << "(" << player.pos.x << ", " << player.pos.y << ") " << player.ang << "\n";
         
         glClearColor(0.0, 0.0f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -261,19 +275,19 @@ int main() {
             float camera_x = 2.0f * i / float(fbx) - 1.0f;
             glm::vec2 ray_dir = player_dir + plane * camera_x;
             ray_dir = glm::normalize(ray_dir);
-            castRay(player.pos, ray_dir, map, map_x, map_y, &ray_dist, &wall_type, &tex_x);
+            castRay(player.pos, ray_dir, map, map_x, map_y, &ray_dist, &tex_x, &wall_type);
             float corrected_dist = dot(ray_dir, player_dir) * ray_dist;
             float proj_scale = 1.0f/(2*tan(player.vfov/2.0f));
             lines[i*lines_stride*2+0] = ratio;
             lines[i*lines_stride*2+1] = (wall_height)/corrected_dist*proj_scale;
             lines[i*lines_stride*2+2] = ray_dist;
-            lines[i*lines_stride*2+3] = wall_type;
+            lines[i*lines_stride*2+3] = (float)tex_sides[wall_type];
             lines[i*lines_stride*2+4] = tex_x/wall_height;
             // number 5 is tex_y, not changed
             lines[i*lines_stride*2+6] = ratio;
             lines[i*lines_stride*2+7] = 0-(wall_height)/corrected_dist*proj_scale;
             lines[i*lines_stride*2+8] = ray_dist;
-            lines[i*lines_stride*2+9] = wall_type;
+            lines[i*lines_stride*2+9] = (float)tex_sides[wall_type];
             lines[i*lines_stride*2+10] = tex_x/wall_height;
             // number 11 is tex_y, not changed
         }
@@ -330,7 +344,7 @@ void processInput(GLFWwindow *window) {
     }
 }
 
-void castRay(glm::vec2 start_pos, glm::vec2 ray_dir, int* grid, int grid_sx, int grid_sy, float* pDist, int* wall_type, float* tex_x) {
+void castRay(glm::vec2 start_pos, glm::vec2 ray_dir, int* grid, int grid_sx, int grid_sy, float* pDist, float* tex_x, int* tex_index) {
     float ray_x = start_pos.x;
     float ray_y = start_pos.y;
     int grid_x = int(ray_x);
@@ -390,11 +404,21 @@ void castRay(glm::vec2 start_pos, glm::vec2 ray_dir, int* grid, int grid_sx, int
     else
         perpDist = (grid_y - start_pos.y + (1 - grid_step_y) * 0.5f) / ray_dir.y;
 
-
+    int wall_side;
     *pDist = dist;
-    *wall_type = grid_val;
-    if (side == 0) *tex_x = start_pos.y + perpDist * ray_dir.y;
-    else if (side == 1) *tex_x = start_pos.x + perpDist * ray_dir.x;
+    if (side == 0) {
+        *tex_x = std::fmod(start_pos.y + perpDist * ray_dir.y, wall_height);
+        wall_side = (grid_step_x == 1) ? 0 : 2;
+    }
+    else if (side == 1) {
+        *tex_x = std::fmod(start_pos.x + perpDist * ray_dir.x, wall_height);
+        wall_side = (grid_step_y == 1) ? 3 : 1;
+    }
+    //*wall_type = grid_val/4;
+    int cell_rotation = grid_val%4;
+    int rotation = cell_rotation + wall_side;
+    if (rotation >= 4) rotation -= 4;
+    *tex_index = grid_val/4*4 + rotation;
 }
 void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
     if (first_mouse) {
